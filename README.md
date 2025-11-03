@@ -5,6 +5,7 @@ Gruppe 7
 Gruppenmitglieder:
 - 
 - Luca Haußknecht, 411857
+- Frederik Beetz, 496945
 
 
 ### Projektbeschreibung
