@@ -1,53 +1,256 @@
 <!DOCTYPE html>
 <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    </head>
 
 <body>
-  <div class="container">
-    <h1>PPVS Hausaufgabe 01</h1>
-    <div class="btns">
-      <button id="ping">Ping</button>
-      <button id="pong">Pong</button>
+    <div id="app">
+        <div class="container py-5">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="mb-0">
+                    Notes App
+                </h1>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary btn-sm" @click="ping">Ping</button>
+                    <button class="btn btn-outline-secondary btn-sm" @click="pong">Pong</button>
+                    <button class="btn btn-success btn-sm" @click="showModal = true">Add Note</button>
+                </div>
+            </div>
+
+            <!-- Error -->
+            <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill"></i> {{ error }}
+                <button type="button" class="btn-close" @click="error = null"></button>
+            </div>
+
+            <!-- Loading -->
+            <div v-if="loading && notes.length === 0" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-3">Loading notes...</p>
+            </div>
+
+            <!-- Empty -->
+            <div v-else-if="notes.length === 0" class="card text-center py-5">
+                <div class="card-body">
+                    <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                    <h5 class="card-title mt-3">No notes yet</h5>
+                    <p class="card-text text-muted">Click "Add Note" to create your first note!</p>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div v-else class="card shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Title</th>
+                                <th>Content</th>
+                                <th>Created At</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="note in notes" :key="note.id">
+                                <td>{{ note.id }}</td>
+                                <td><strong>{{ note.title }}</strong></td>
+                                <td >{{ note.content }}</td>
+                                <td class="text-muted small">
+                                    {{ formatDate(note.created_at) }}
+                                </td>
+                                <td>
+                                    <button 
+                                        class="btn btn-sm btn-danger"
+                                        @click="deleteNote(note.id)"
+                                        :disabled="loading"
+                                    >
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal -->
+        <div v-if="showModal" class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" @click.self="closeModal">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add New Note</h5>
+                        <button type="button" class="btn-close" @click="closeModal" :disabled="loading"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Title</label>
+                            <input 
+                                type="text" 
+                                class="form-control" 
+                                id="title" 
+                                v-model="newNote.title" 
+                                placeholder="Enter note title"
+                                @keyup.enter="createNote"
+                                ref="titleInput"
+                            >
+                        </div>
+                        <div class="mb-3">
+                            <label for="content" class="form-label">Content</label>
+                            <textarea 
+                                class="form-control" 
+                                id="content" 
+                                rows="5"
+                                v-model="newNote.content" 
+                                placeholder="Enter note content"
+                            ></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @click="closeModal" :disabled="loading">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn btn-success" @click="createNote" :disabled="loading">
+                            <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
+                            {{ loading ? 'Adding...' : 'Add Note' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="result" class="res">
+    <script>
+        const { createApp } = Vue;
 
-    </div>
-  </div>
+        createApp({
+            data() {
+                return {
+                    notes: [],
+                    newNote: {
+                        title: '',
+                        content: ''
+                    },
+                    loading: false,
+                    error: null,
+                    showModal: false
+                };
+            },
+            methods: {
+                async fetchNotes() {
+                    try {
+                        this.error = null;
+                        const response = await fetch('/api/items');
+                        if (!response.ok) throw new Error('Failed to fetch notes');
+                        this.notes = await response.json();
+                    } catch (err) {
+                        this.error = err.message;
+                        console.error('Error fetching notes:', err);
+                    }
+                },
+                async createNote() {
+                    if (!this.newNote.title.trim() || !this.newNote.content.trim()) {
+                        this.error = 'Please fill in both title and content';
+                        this.showModal = false;
+                        return;
+                    }
 
+                    try {
+                        this.loading = true;
+                        this.error = null;
+                        const response = await fetch('/api/items', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(this.newNote)
+                        });
 
-  <style>
-    .container {
-      width: 100%;
-      height: 100%;
-      margin: 50px 200px;
-      font-family: Arial, Helvetica, sans-serif;
-    }
+                        if (!response.ok) throw new Error('Failed to create note');
 
-    h1 {
-      color: black;
-    }
+                        this.newNote.title = '';
+                        this.newNote.content = '';
+                        this.showModal = false;
+                        await this.fetchNotes();
+                    } catch (err) {
+                        this.error = err.message;
+                        console.error('Error creating note:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                closeModal() {
+                    this.showModal = false;
+                    this.newNote.title = '';
+                    this.newNote.content = '';
+                    this.error = null;
+                },
+                async deleteNote(id) {
+                    if (!confirm('Are you sure you want to delete this note?')) return;
 
-    .res {
-      border: 1px solid #ddd;
-      width: 500px;
-      height: 500px;
-    }
-  </style>
+                    try {
+                        this.loading = true;
+                        this.error = null;
+                        const response = await fetch(`/api/items/${id}`, {
+                            method: 'DELETE'
+                        });
 
-  <script>
-    var result = document.getElementById('result');
-
-    document.getElementById('ping').onclick = function () {
-      fetch('/api/ping')
-        .then(function (response) {return response.text();})
-        .then(function (text) {result.textContent = text;})
-    };
-
-    document.getElementById('pong').onclick = function () {
-      fetch('/api/pong', {method: 'POST'})
-        .then(function (response) {return response.text();})
-        .then(function (text) {result.textContent = text;})
-    };
-  </script>
+                        if (!response.ok) throw new Error('Failed to delete note');
+                        await this.fetchNotes();
+                    } catch (err) {
+                        this.error = err.message;
+                        console.error('Error deleting note:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                formatDate(dateString) {
+                    return new Date(dateString).toLocaleString();
+                },
+                async ping() {
+                    try {
+                        const response = await fetch('/api/ping');
+                        if (!response.ok) throw new Error('Ping failed');
+                        const data = await response.json();
+                        alert(`Ping Response:\n\nStatus: ${data.status}\nTime: ${data.time}`);
+                    } catch (err) {
+                        this.error = err.message;
+                        console.error('Error pinging:', err);
+                    }
+                },
+                async pong() {
+                    try {
+                        const response = await fetch('/api/pong', {
+                            method: 'POST'
+                        });
+                        if (!response.ok) throw new Error('Pong failed');
+                    } catch (err) {
+                        this.error = err.message;
+                        console.error('Error ponging:', err);
+                    }
+                }
+            },
+            mounted() {
+                this.fetchNotes();
+            },
+            watch: {
+                showModal(newVal) {
+                    if (newVal) {
+                        this.$nextTick(() => {
+                            this.$refs.titleInput?.focus();
+                        });
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
 
 </body>
 
